@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["bash"]
+
+[phases.build]
+cmds = ["echo 'No build step configured'"]
+
+[start]
+cmd = "echo 'Please configure start command'"
