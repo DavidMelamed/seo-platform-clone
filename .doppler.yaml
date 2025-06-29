@@ -1,0 +1,3 @@
+setup:
+  project: seo-tools-clone
+  config: dev
