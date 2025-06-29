@@ -1,0 +1,200 @@
+[
+  {
+    "path": "/home/david/AI",
+    "name": "AI",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:22:47 -0600",
+    "remote_url": "https://github.com/DavidMelamed/AI.git"
+  },
+  {
+    "path": "/home/david/CascadeProjects",
+    "name": "CascadeProjects",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:22:50 -0600",
+    "remote_url": "https://github.com/DavidMelamed/CascadeProjects.git"
+  },
+  {
+    "path": "/home/david/ai_ml_engine",
+    "name": "ai_ml_engine",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:22:53 -0600",
+    "remote_url": "https://github.com/DavidMelamed/ai_ml_engine.git"
+  },
+  {
+    "path": "/home/david/claude-code-flow",
+    "name": "claude-code-flow",
+    "has_remote": true,
+    "has_changes": true,
+    "current_branch": "main",
+    "last_commit": "2025-06-19 08:20:27 -0400",
+    "remote_url": "https://github.com/ruvnet/claude-code-flow.git"
+  },
+  {
+    "path": "/home/david/data-collection",
+    "name": "data-collection",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:22:57 -0600",
+    "remote_url": "https://github.com/DavidMelamed/data-collection.git"
+  },
+  {
+    "path": "/home/david/database_schemas",
+    "name": "database_schemas",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:00 -0600",
+    "remote_url": "https://github.com/DavidMelamed/database_schemas.git"
+  },
+  {
+    "path": "/home/david/databases",
+    "name": "databases",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:02 -0600",
+    "remote_url": "https://github.com/DavidMelamed/databases.git"
+  },
+  {
+    "path": "/home/david/google_ads_data_extraction",
+    "name": "google_ads_data_extraction",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:06 -0600",
+    "remote_url": "https://github.com/DavidMelamed/google_ads_data_extraction.git"
+  },
+  {
+    "path": "/home/david/growth-ai",
+    "name": "growth-ai",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:09 -0600",
+    "remote_url": "https://github.com/DavidMelamed/growth-ai.git"
+  },
+  {
+    "path": "/home/david/infrastructure",
+    "name": "infrastructure",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:12 -0600",
+    "remote_url": "https://github.com/DavidMelamed/infrastructure.git"
+  },
+  {
+    "path": "/home/david/integration",
+    "name": "integration",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:16 -0600",
+    "remote_url": "https://github.com/DavidMelamed/integration.git"
+  },
+  {
+    "path": "/home/david/landing-page-builder",
+    "name": "landing-page-builder",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:19 -0600",
+    "remote_url": "https://github.com/DavidMelamed/landing-page-builder.git"
+  },
+  {
+    "path": "/home/david/memory",
+    "name": "memory",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:23 -0600",
+    "remote_url": "https://github.com/DavidMelamed/memory.git"
+  },
+  {
+    "path": "/home/david/ottomator-agents",
+    "name": "ottomator-agents",
+    "has_remote": true,
+    "has_changes": true,
+    "current_branch": "main",
+    "last_commit": "2025-06-23 20:33:53 -0500",
+    "remote_url": "https://github.com/coleam00/ottomator-agents.git"
+  },
+  {
+    "path": "/home/david/ottomator-agents/agentic-rag-knowledge-graph",
+    "name": "agentic-rag-knowledge-graph",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-27 12:43:00 -0600",
+    "remote_url": "https://github.com/DavidMelamed/agentic-rag-knowledge-graph.git"
+  },
+  {
+    "path": "/home/david/qudag",
+    "name": "qudag",
+    "has_remote": true,
+    "has_changes": true,
+    "current_branch": "main",
+    "last_commit": "2025-06-23 12:45:42 -0400",
+    "remote_url": "https://github.com/ruvnet/qudag.git"
+  },
+  {
+    "path": "/home/david/report-generation-specialist",
+    "name": "report-generation-specialist",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-25 23:19:14 -0600",
+    "remote_url": "https://github.com/DavidMelamed/report-generation-specialist.git"
+  },
+  {
+    "path": "/home/david/review-analysis-backend",
+    "name": "review-analysis-backend",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:26 -0600",
+    "remote_url": "https://github.com/DavidMelamed/review-analysis-backend.git"
+  },
+  {
+    "path": "/home/david/review-analysis-frontend",
+    "name": "review-analysis-frontend",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:29 -0600",
+    "remote_url": "https://github.com/DavidMelamed/review-analysis-frontend.git"
+  },
+  {
+    "path": "/home/david/review-analysis-saas",
+    "name": "review-analysis-saas",
+    "has_remote": true,
+    "has_changes": false,
+    "current_branch": "main",
+    "last_commit": "2025-06-25 23:12:24 -0600",
+    "remote_url": "https://github.com/DavidMelamed/review-insights-platform.git"
+  },
+  {
+    "path": "/home/david/seo-saas-project",
+    "name": "seo-saas-project",
+    "has_remote": true,
+    "has_changes": true,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 12:23:32 -0600",
+    "remote_url": "https://github.com/DavidMelamed/seo-saas-project.git"
+  },
+  {
+    "path": "/home/david/seo-tools-clone",
+    "name": "seo-tools-clone",
+    "has_remote": true,
+    "has_changes": true,
+    "current_branch": "main",
+    "last_commit": "2025-06-29 11:46:13 -0600",
+    "remote_url": "https://github.com/DavidMelamed/seo-platform-clone.git"
+  }
+]

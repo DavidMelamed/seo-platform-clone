@@ -1,0 +1,11 @@
+=== Repository Summary ===
+Total repositories: 22
+
+Repositories without remotes:
+
+Repositories with uncommitted changes:
+/home/david/claude-code-flow
+/home/david/ottomator-agents
+/home/david/qudag
+/home/david/seo-saas-project
+/home/david/seo-tools-clone
