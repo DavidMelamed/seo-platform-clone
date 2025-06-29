@@ -1,0 +1,14 @@
+{
+  "name": "dagger-pipeline",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "pipeline": "tsx ci.ts"
+  },
+  "devDependencies": {
+    "@dagger.io/dagger": "^0.9.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

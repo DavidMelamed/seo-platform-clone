@@ -1,0 +1,58 @@
+name: Dagger CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install Dagger dependencies
+      working-directory: dagger
+      run: npm install
+    
+    - name: Run Dagger Pipeline
+      working-directory: dagger
+      run: npm run pipeline
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: build-artifacts
+        path: |
+          build/
+          dist/
+          coverage/
+        retention-days: 7
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
