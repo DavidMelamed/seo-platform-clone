@@ -1,0 +1,272 @@
+services:
+  # PostgreSQL - Main database
+  postgres:
+    image: postgres:15-alpine
+    container_name: seo_platform_postgres
+    environment:
+      POSTGRES_DB: seo_platform
+      POSTGRES_USER: seo_user
+      POSTGRES_PASSWORD: seo_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seo_user -d seo_platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis - Caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: seo_platform_redis
+    command: redis-server --appendonly yes --requirepass redis_password
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # TimescaleDB - Time-series data for rankings and analytics
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: seo_platform_timescale
+    environment:
+      POSTGRES_DB: seo_timeseries
+      POSTGRES_USER: timescale_user
+      POSTGRES_PASSWORD: timescale_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./database/timescale-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U timescale_user -d seo_timeseries"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ClickHouse - Analytics and big data
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: seo_platform_clickhouse
+    environment:
+      CLICKHOUSE_DB: seo_analytics
+      CLICKHOUSE_USER: clickhouse_user
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_PASSWORD: clickhouse_password
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./database/clickhouse-init:/docker-entrypoint-initdb.d
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native interface
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Elasticsearch - Search and text analysis
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: seo_platform_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Apache Kafka - Message streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: seo_platform_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: seo_platform_kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MinIO - Object storage for images and files
+  minio:
+    image: minio/minio:latest
+    container_name: seo_platform_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_user
+      MINIO_ROOT_PASSWORD: minio_password
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9010:9000"  # API
+      - "9011:9001"  # Console
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana - Monitoring and dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: seo_platform_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - timescaledb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: seo_platform_prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: seo_platform_backend
+    environment:
+      - DATABASE_URL=postgresql://seo_user:seo_password@postgres:5432/seo_platform
+      - TIMESCALE_URL=postgresql://timescale_user:timescale_password@timescaledb:5432/seo_timeseries
+      - REDIS_URL=redis://:redis_password@redis:6379/0
+      - CLICKHOUSE_URL=http://clickhouse_user:clickhouse_password@clickhouse:8123/seo_analytics
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minio_user
+      - MINIO_SECRET_KEY=minio_password
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - timescaledb
+      - clickhouse
+      - elasticsearch
+      - kafka
+      - minio
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: seo_platform_frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api/v1
+      - REACT_APP_WS_URL=ws://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  timescale_data:
+  clickhouse_data:
+  elasticsearch_data:
+  zookeeper_data:
+  kafka_data:
+  minio_data:
+  grafana_data:
+  prometheus_data:
+  backend_uploads:
+
+networks:
+  default:
+    name: seo_platform_network
