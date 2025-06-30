@@ -111,10 +111,12 @@ async def analyze_competitor_page(
                 tmp_file.write(content)
                 tmp_path = tmp_file.name
             
+            vision_service = get_vision_service()
             analysis = await vision_service.analyze_page_layout(tmp_path, url)
             os.unlink(tmp_path)
         else:
             # Take screenshot of URL
+            vision_service = get_vision_service()
             analysis = await vision_service.analyze_competitor_page(url)
         
         return VisionAnalysisResponse(
@@ -136,6 +138,7 @@ async def generate_content(
     Generate SEO-optimized content using AI
     """
     try:
+        content_service = get_content_service()
         # Generate content
         content = await content_service.generate_content(
             content_type=request.content_type,
@@ -195,6 +198,7 @@ async def bulk_generate_content(
         db.add(job)
         db.commit()
         
+        content_service = get_content_service()
         # Add to background tasks
         background_tasks.add_task(
             content_service.bulk_generate,
@@ -223,6 +227,7 @@ async def optimize_for_voice_search(
     Optimize content for voice search
     """
     try:
+        voice_service = get_voice_service()
         # Optimize content
         optimization = await voice_service.optimize_for_voice(
             content=request.content,
@@ -372,6 +377,7 @@ async def get_content_templates(
     """
     Get available content templates
     """
+    content_service = get_content_service()
     templates = await content_service.get_templates()
     return {"templates": templates}
 
@@ -401,6 +407,84 @@ async def create_content_template(
         return {
             "id": db_template.id,
             "message": "Template created successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/seo/analyze")
+async def analyze_seo(
+    request: dict,  # Using dict since we need to add the schema
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Perform comprehensive SEO analysis of a URL
+    """
+    try:
+        # Mock SEO analysis response for now
+        return {
+            "url": request.get("url", ""),
+            "seo_score": 75.5,
+            "technical_issues": [
+                {"type": "missing_meta_description", "severity": "medium", "description": "Meta description is missing"},
+                {"type": "slow_loading", "severity": "high", "description": "Page load time exceeds 3 seconds"}
+            ],
+            "content_analysis": {
+                "word_count": 1250,
+                "readability_score": 68,
+                "keyword_density": {"main_keyword": 2.1, "secondary_keyword": 1.3}
+            },
+            "competitor_comparison": {
+                "avg_score": 72,
+                "ranking_position": 3,
+                "gaps": ["missing schema markup", "low mobile score"]
+            },
+            "recommendations": [
+                "Add meta description",
+                "Optimize images for faster loading",
+                "Implement schema markup",
+                "Improve mobile responsiveness"
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/content/optimize")
+async def optimize_content(
+    request: dict,  # Using dict since we need to add the schema
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Optimize existing content for SEO
+    """
+    try:
+        content = request.get("content", "")
+        target_keywords = request.get("target_keywords", [])
+        
+        # Mock content optimization response
+        return {
+            "optimized_content": content + "\n\n[SEO-optimized version with better keyword placement and structure]",
+            "keyword_density": {kw: 2.5 for kw in target_keywords},
+            "readability_score": 78.5,
+            "suggested_headings": [
+                "Introduction to " + target_keywords[0] if target_keywords else "Introduction",
+                "Benefits and Features",
+                "Best Practices",
+                "Conclusion"
+            ],
+            "internal_linking_suggestions": [
+                {"anchor_text": "related article", "url": "/related-content"},
+                {"anchor_text": "learn more", "url": "/detailed-guide"}
+            ],
+            "optimization_tips": [
+                "Add more subheadings for better structure",
+                "Include target keywords in first paragraph",
+                "Add internal links to related content",
+                "Optimize for featured snippets with bullet points"
+            ]
         }
         
     except Exception as e:

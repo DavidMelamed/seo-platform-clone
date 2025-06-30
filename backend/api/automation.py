@@ -421,6 +421,157 @@ async def create_bulk_operation(
         "status": "pending"
     }
 
+@router.put("/workflows/{project_id}/{workflow_id}", response_model=WorkflowResponse)
+async def update_workflow(
+    project_id: str,
+    workflow_id: str,
+    workflow_data: WorkflowUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a workflow"""
+    
+    # Verify project access
+    project = get_user_project(project_id, current_user, db)
+    
+    # Get existing workflows
+    workflows_key = f"workflows:{project_id}"
+    workflows_data = await redis_client.get_json(workflows_key) or []
+    
+    # Find and update workflow
+    workflow = next((wf for wf in workflows_data if wf["id"] == workflow_id), None)
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    
+    # Update fields
+    update_data = workflow_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if value is not None:
+            workflow[field] = value
+    
+    workflow["updated_at"] = datetime.utcnow().isoformat()
+    
+    # Save updated workflows
+    await redis_client.set(workflows_key, workflows_data)
+    
+    return WorkflowResponse(
+        id=workflow["id"],
+        name=workflow["name"],
+        description=workflow["description"],
+        project_id=workflow["project_id"],
+        steps=workflow["steps"],
+        schedule=workflow.get("schedule"),
+        enabled=workflow.get("enabled", True),
+        tags=workflow.get("tags", []),
+        last_executed=datetime.fromisoformat(workflow["last_executed"]) if workflow.get("last_executed") else None,
+        execution_count=workflow.get("execution_count", 0),
+        success_rate=workflow.get("success_rate", 0.0),
+        created_at=datetime.fromisoformat(workflow["created_at"]),
+        updated_at=datetime.fromisoformat(workflow["updated_at"])
+    )
+
+@router.delete("/workflows/{project_id}/{workflow_id}")
+async def delete_workflow(
+    project_id: str,
+    workflow_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a workflow"""
+    
+    # Verify project access
+    project = get_user_project(project_id, current_user, db)
+    
+    # Get existing workflows
+    workflows_key = f"workflows:{project_id}"
+    workflows_data = await redis_client.get_json(workflows_key) or []
+    
+    # Find and remove workflow
+    workflow_index = next((i for i, wf in enumerate(workflows_data) if wf["id"] == workflow_id), None)
+    if workflow_index is None:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    
+    workflows_data.pop(workflow_index)
+    
+    # Save updated workflows
+    await redis_client.set(workflows_key, workflows_data)
+    
+    return {"message": "Workflow deleted successfully"}
+
+@router.get("/stats")
+async def get_automation_stats(
+    project_id: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> AutomationStats:
+    """Get automation statistics for a project"""
+    
+    # Verify project access
+    project = get_user_project(project_id, current_user, db)
+    
+    # Get workflows from Redis
+    workflows_key = f"workflows:{project_id}"
+    workflows_data = await redis_client.get_json(workflows_key) or []
+    
+    total_workflows = len(workflows_data)
+    active_workflows = len([wf for wf in workflows_data if wf.get("enabled", True)])
+    
+    # Get executions from database
+    total_executions = db.query(WorkflowExecution).filter(
+        WorkflowExecution.project_id == project_id
+    ).count()
+    
+    # Get executions today
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    executions_today = db.query(WorkflowExecution).filter(
+        and_(
+            WorkflowExecution.project_id == project_id,
+            WorkflowExecution.started_at >= today_start
+        )
+    ).count()
+    
+    # Calculate success rate
+    completed_executions = db.query(WorkflowExecution).filter(
+        and_(
+            WorkflowExecution.project_id == project_id,
+            WorkflowExecution.status.in_(["completed", "failed"])
+        )
+    ).all()
+    
+    if completed_executions:
+        successful = len([ex for ex in completed_executions if ex.status == "completed"])
+        success_rate = (successful / len(completed_executions)) * 100
+    else:
+        success_rate = 0.0
+    
+    # Calculate average execution time
+    completed_with_duration = [
+        ex for ex in completed_executions 
+        if ex.completed_at and ex.started_at
+    ]
+    
+    if completed_with_duration:
+        total_duration = sum([
+            (ex.completed_at - ex.started_at).total_seconds() 
+            for ex in completed_with_duration
+        ])
+        avg_execution_time = total_duration / len(completed_with_duration)
+    else:
+        avg_execution_time = 0.0
+    
+    # Count scheduled tasks (workflows with schedule)
+    scheduled_tasks = len([wf for wf in workflows_data if wf.get("schedule")])
+    
+    return AutomationStats(
+        total_workflows=total_workflows,
+        active_workflows=active_workflows,
+        total_executions=total_executions,
+        executions_today=executions_today,
+        success_rate=round(success_rate, 1),
+        avg_execution_time=round(avg_execution_time, 1),
+        scheduled_tasks=scheduled_tasks
+    )
+
 @router.get("/templates")
 async def get_workflow_templates():
     """Get predefined workflow templates"""
