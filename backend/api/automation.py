@@ -1,52 +1,128 @@
 """
 Automation API endpoints
+Comprehensive workflow automation and scheduling system
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, desc, func
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import json
+import asyncio
+import logging
+from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 from core.database import get_db
-from models import Project, WorkflowExecution, User
+from models import Project, WorkflowExecution, User, Keyword, Ranking
 from api.auth import get_current_user
+from services.dataforseo.client import DataForSEOClient
 from core.redis_client import redis_client
 
 router = APIRouter()
 
+# Enums
+class WorkflowStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+class ActionType(str, Enum):
+    KEYWORD_RESEARCH = "keyword_research"
+    RANK_TRACKING = "rank_tracking"
+    CONTENT_OPTIMIZATION = "content_optimization"
+    TECHNICAL_AUDIT = "technical_audit"
+    BACKLINK_ANALYSIS = "backlink_analysis"
+    COMPETITOR_ANALYSIS = "competitor_analysis"
+    SERP_ANALYSIS = "serp_analysis"
+    BULK_KEYWORD_UPDATE = "bulk_keyword_update"
+    REPORT_GENERATION = "report_generation"
+    EMAIL_NOTIFICATION = "email_notification"
+
 # Pydantic models
+class WorkflowStep(BaseModel):
+    name: str
+    action: ActionType
+    parameters: Dict[str, Any] = {}
+    condition: Optional[str] = None  # Condition for step execution
+    retry_count: int = 0
+    timeout_seconds: int = 300
+
 class WorkflowCreate(BaseModel):
     name: str
     description: str
-    steps: List[Dict[str, Any]]
+    project_id: str
+    steps: List[WorkflowStep]
     schedule: Optional[str] = None  # cron expression
     enabled: bool = True
+    tags: List[str] = []
+
+class WorkflowUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    steps: Optional[List[WorkflowStep]] = None
+    schedule: Optional[str] = None
+    enabled: Optional[bool] = None
+    tags: Optional[List[str]] = None
 
 class WorkflowResponse(BaseModel):
     id: str
     name: str
     description: str
-    steps: List[Dict[str, Any]]
+    project_id: str
+    steps: List[WorkflowStep]
     schedule: Optional[str]
     enabled: bool
+    tags: List[str]
+    last_executed: Optional[datetime]
+    execution_count: int
+    success_rate: float
     created_at: datetime
+    updated_at: datetime
 
 class WorkflowExecutionResponse(BaseModel):
     id: str
+    workflow_id: str
     workflow_name: str
-    status: str
+    status: WorkflowStatus
+    progress: float
+    current_step: Optional[str]
     started_at: datetime
     completed_at: Optional[datetime]
+    duration_seconds: Optional[int]
     output_data: Dict[str, Any]
+    error_log: Optional[str]
 
 class BulkOperationRequest(BaseModel):
-    operation_type: str
+    operation_type: ActionType
     items: List[Dict[str, Any]]
     batch_size: int = 100
+    parallel_execution: bool = False
+
+class ScheduledTask(BaseModel):
+    id: str
+    workflow_id: str
+    workflow_name: str
+    schedule: str
+    next_run: datetime
+    enabled: bool
+    last_run: Optional[datetime]
+    run_count: int
+
+class AutomationStats(BaseModel):
+    total_workflows: int
+    active_workflows: int
+    total_executions: int
+    executions_today: int
+    success_rate: float
+    avg_execution_time: float
+    scheduled_tasks: int
 
 # Helper functions
 def get_user_project(project_id: str, user: User, db: Session):
