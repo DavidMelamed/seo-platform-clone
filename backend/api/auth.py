@@ -11,7 +11,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 import uuid
 
-from core.database import get_db, User, Organization
+from core.database import get_db
+from models import User, Organization
 from core.config import settings
 
 router = APIRouter()

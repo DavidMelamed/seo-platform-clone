@@ -11,8 +11,9 @@ from datetime import datetime
 import uuid
 import json
 
-from core.database import get_db, Project, WorkflowExecution
-from api.auth import get_current_user, User
+from core.database import get_db
+from models import Project, WorkflowExecution, User
+from api.auth import get_current_user
 from core.redis_client import redis_client
 
 router = APIRouter()

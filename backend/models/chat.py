@@ -31,7 +31,7 @@ class ChatMessage(Base):
     session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"))
     role = Column(String(20))  # user, assistant, system
     content = Column(Text)
-    metadata = Column(JSON)  # Additional message metadata
+    message_metadata = Column(JSON)  # Additional message metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

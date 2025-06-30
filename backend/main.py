@@ -12,6 +12,8 @@ from datetime import datetime
 
 # Import routers
 from api.auth import router as auth_router
+from api.dashboard import router as dashboard_router
+from api.projects import router as projects_router
 from api.keywords import router as keywords_router
 from api.analytics import router as analytics_router
 from api.monitoring import router as monitoring_router
@@ -46,6 +48,8 @@ security = HTTPBearer()
 
 # Include routers
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(projects_router, prefix="/api/v1/projects", tags=["Projects"])
 app.include_router(keywords_router, prefix="/api/v1/keywords", tags=["Keywords"])
 app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(monitoring_router, prefix="/api/v1/monitoring", tags=["Monitoring"])

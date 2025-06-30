@@ -9,9 +9,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
 import uuid
+import asyncio
+import logging
 
-from core.database import get_db, Keyword, Project, Ranking
-from api.auth import get_current_user, User
+logger = logging.getLogger(__name__)
+
+from core.database import get_db
+from models import Keyword, Project, Ranking, User
+from api.auth import get_current_user
 from services.dataforseo.client import DataForSEOClient
 from services.ml_predictive_seo_service import PredictiveSEOService
 from core.redis_client import redis_client
@@ -78,7 +83,7 @@ def get_user_project(project_id: str, user: User, db: Session):
     return project
 
 async def analyze_keyword_data(keyword: str) -> dict:
-    """Analyze keyword using DataForSEO"""
+    """Analyze keyword using DataForSEO with comprehensive data"""
     try:
         # Check cache first
         cache_key = f"keyword_analysis:{keyword}"
@@ -86,39 +91,67 @@ async def analyze_keyword_data(keyword: str) -> dict:
         if cached_data:
             return cached_data
         
-        # Get data from DataForSEO
-        dataforseo = DataForSEOClient()
-        keyword_data = await dataforseo.get_keyword_data([keyword])
+        # Initialize DataForSEO client
+        async with DataForSEOClient() as dataforseo:
+            # Get multiple data points in parallel
+            tasks = [
+                dataforseo.get_keyword_data([keyword]),
+                dataforseo.get_keyword_suggestions(keyword, limit=10),
+                dataforseo.get_related_keywords(keyword, limit=5)
+            ]
+            
+            keyword_data, suggestions_data, related_data = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Parse main keyword data
+            analysis = {
+                "search_volume": 0,
+                "difficulty": 0,
+                "cpc": 0,
+                "competition": 0,
+                "trends": {},
+                "suggestions": []
+            }
+            
+            # Process keyword data
+            if keyword_data and not isinstance(keyword_data, Exception):
+                if keyword_data.get("tasks") and keyword_data["tasks"]:
+                    task_result = keyword_data["tasks"][0].get("result", [])
+                    if task_result:
+                        data = task_result[0]
+                        analysis.update({
+                            "search_volume": data.get("search_volume", 0),
+                            "difficulty": data.get("keyword_difficulty", 0),
+                            "cpc": data.get("cpc", 0),
+                            "competition": data.get("competition_level", 0),
+                            "trends": data.get("monthly_searches", {})
+                        })
+            
+            # Process suggestions
+            if suggestions_data and not isinstance(suggestions_data, Exception):
+                if suggestions_data.get("tasks") and suggestions_data["tasks"]:
+                    suggestions_result = suggestions_data["tasks"][0].get("result", [])
+                    if suggestions_result:
+                        suggestions = []
+                        for item in suggestions_result[0].get("items", [])[:10]:
+                            suggestions.append(item.get("keyword", ""))
+                        analysis["suggestions"] = [s for s in suggestions if s]
+            
+            # Add related keywords to suggestions if available
+            if related_data and not isinstance(related_data, Exception):
+                if related_data.get("tasks") and related_data["tasks"]:
+                    related_result = related_data["tasks"][0].get("result", [])
+                    if related_result:
+                        for item in related_result[0].get("items", [])[:5]:
+                            related_keyword = item.get("keyword", "")
+                            if related_keyword and related_keyword not in analysis["suggestions"]:
+                                analysis["suggestions"].append(related_keyword)
         
-        if keyword_data and keyword_data.get("tasks"):
-            task_result = keyword_data["tasks"][0].get("result", [])
-            if task_result:
-                data = task_result[0]
-                analysis = {
-                    "search_volume": data.get("search_volume", 0),
-                    "difficulty": data.get("keyword_difficulty", 0),
-                    "cpc": data.get("cpc", 0),
-                    "competition": data.get("competition", 0),
-                    "trends": data.get("monthly_searches", []),
-                    "suggestions": []  # TODO: Add related keywords
-                }
-                
-                # Cache for 24 hours
-                await redis_client.cache_response(cache_key, analysis, 86400)
-                return analysis
-        
-        # Default empty response
-        return {
-            "search_volume": 0,
-            "difficulty": 0,
-            "cpc": 0,
-            "competition": 0,
-            "trends": {},
-            "suggestions": []
-        }
+        # Cache for 24 hours
+        await redis_client.cache_response(cache_key, analysis, 86400)
+        return analysis
         
     except Exception as e:
-        print(f"Error analyzing keyword {keyword}: {e}")
+        logger.error(f"Error analyzing keyword {keyword}: {e}")
         return {
             "search_volume": 0,
             "difficulty": 0,
@@ -429,7 +462,7 @@ async def predict_keyword_ranking(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Predict future rankings for a keyword"""
+    """Predict future rankings for a keyword using ML"""
     
     keyword = db.query(Keyword).filter(Keyword.id == keyword_id).first()
     if not keyword:
@@ -438,29 +471,91 @@ async def predict_keyword_ranking(
     # Verify access
     get_user_project(str(keyword.project_id), current_user, db)
     
-    # TODO: Implement ML prediction service
-    # For now, return mock data
-    
-    return {
-        "keyword": keyword.keyword,
-        "current_position": keyword.current_position or 50,
-        "predictions": [
-            {"date": "2024-07-01", "position": 45, "confidence": 0.8},
-            {"date": "2024-07-15", "position": 42, "confidence": 0.75},
-            {"date": "2024-08-01", "position": 38, "confidence": 0.7}
-        ],
-        "probability_top_10": 0.65,
-        "probability_top_3": 0.25,
-        "factors": {
-            "content_quality": 0.3,
-            "backlinks": 0.25,
-            "technical_seo": 0.2,
-            "user_experience": 0.15,
-            "competition": 0.1
-        }
-    }
+    try:
+        # Get historical ranking data
+        rankings = db.query(Ranking).filter(
+            Ranking.keyword_id == keyword_id
+        ).order_by(Ranking.recorded_at).all()
+        
+        # Initialize ML service
+        ml_service = PredictiveSEOService()
+        
+        # Prepare training data
+        if len(rankings) >= 7:  # Need at least a week of data
+            historical_data = [
+                {
+                    "date": r.recorded_at.isoformat(),
+                    "position": r.position,
+                    "search_volume": keyword.search_volume or 1000,
+                    "difficulty": keyword.difficulty or 50,
+                    "competition": keyword.competition or 0.5
+                }
+                for r in rankings
+            ]
+            
+            # Get prediction
+            prediction_result = await ml_service.predict_keyword_ranking(
+                keyword_data={
+                    "keyword": keyword.keyword,
+                    "current_position": keyword.current_position or 50,
+                    "search_volume": keyword.search_volume or 1000,
+                    "difficulty": keyword.difficulty or 50,
+                    "target_position": keyword.target_position or 10
+                },
+                historical_data=historical_data,
+                days_ahead=days_ahead
+            )
+            
+            return prediction_result
+            
+        else:
+            # Not enough data - return baseline prediction
+            current_pos = keyword.current_position or 50
+            target_pos = keyword.target_position or 10
+            
+            # Simple trend calculation
+            improvement_rate = (current_pos - target_pos) / days_ahead if current_pos > target_pos else 0
+            
+            predictions = []
+            for i in range(1, min(days_ahead + 1, 13)):  # Up to 12 predictions
+                days_out = i * (days_ahead // 12) if days_ahead > 12 else i * 7
+                predicted_pos = max(target_pos, current_pos - (improvement_rate * days_out))
+                confidence = max(0.3, 0.9 - (i * 0.05))  # Decreasing confidence over time
+                
+                future_date = datetime.utcnow() + timedelta(days=days_out)
+                predictions.append({
+                    "date": future_date.strftime("%Y-%m-%d"),
+                    "position": round(predicted_pos, 1),
+                    "confidence": round(confidence, 2)
+                })
+            
+            # Calculate probabilities based on target and difficulty
+            difficulty_factor = (keyword.difficulty or 50) / 100
+            prob_top_10 = max(0.1, 0.8 - difficulty_factor) if target_pos <= 10 else 0.3
+            prob_top_3 = max(0.05, 0.4 - difficulty_factor) if target_pos <= 3 else 0.1
+            
+            return {
+                "keyword": keyword.keyword,
+                "current_position": current_pos,
+                "target_position": target_pos,
+                "predictions": predictions,
+                "probability_top_10": round(prob_top_10, 2),
+                "probability_top_3": round(prob_top_3, 2),
+                "factors": {
+                    "content_quality": 0.25,
+                    "backlinks": 0.25,
+                    "technical_seo": 0.20,
+                    "user_experience": 0.15,
+                    "competition": 0.15
+                },
+                "confidence_note": "Limited historical data available. Predictions based on keyword difficulty and target position."
+            }
+            
+    except Exception as e:
+        logger.error(f"Error predicting ranking for keyword {keyword_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate ranking prediction")
 
-# Background task
+# Background tasks
 async def update_keyword_analysis(keyword_id: str, keyword_text: str):
     """Background task to update keyword analysis"""
     try:
@@ -484,4 +579,107 @@ async def update_keyword_analysis(keyword_id: str, keyword_text: str):
         db.close()
         
     except Exception as e:
-        print(f"Error updating keyword analysis for {keyword_id}: {e}")
+        logger.error(f"Error updating keyword analysis for {keyword_id}: {e}")
+
+async def update_keyword_rankings(project_id: str):
+    """Background task to update keyword rankings for a project"""
+    try:
+        from core.database import SessionLocal
+        db = SessionLocal()
+        
+        # Get project and domain
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            logger.error(f"Project {project_id} not found")
+            return
+        
+        # Get all keywords for the project
+        keywords = db.query(Keyword).filter(Keyword.project_id == project_id).all()
+        
+        if not keywords:
+            logger.info(f"No keywords found for project {project_id}")
+            return
+        
+        async with DataForSEOClient() as dataforseo:
+            for keyword in keywords:
+                try:
+                    # Get SERP results for the keyword
+                    serp_data = await dataforseo.get_serp_results(keyword.keyword)
+                    
+                    if serp_data and serp_data.get("tasks"):
+                        task_result = serp_data["tasks"][0].get("result", [])
+                        if task_result:
+                            organic_results = task_result[0].get("items", [])
+                            
+                            # Find our domain in results
+                            position = None
+                            url = ""
+                            title = ""
+                            serp_features = []
+                            
+                            for i, result in enumerate(organic_results):
+                                if result.get("domain") == project.domain:
+                                    position = i + 1
+                                    url = result.get("url", "")
+                                    title = result.get("title", "")
+                                    break
+                            
+                            # Extract SERP features
+                            if task_result[0].get("feature_snippets"):
+                                serp_features.append("featured_snippet")
+                            if task_result[0].get("knowledge_graph"):
+                                serp_features.append("knowledge_graph")
+                            if task_result[0].get("local_pack"):
+                                serp_features.append("local_pack")
+                            
+                            # Update keyword position
+                            if position:
+                                keyword.current_position = position
+                                keyword.updated_at = datetime.utcnow()
+                                
+                                # Create ranking record
+                                ranking = Ranking(
+                                    keyword_id=keyword.id,
+                                    position=position,
+                                    url=url,
+                                    title=title,
+                                    serp_features=serp_features,
+                                    recorded_at=datetime.utcnow()
+                                )
+                                db.add(ranking)
+                            
+                    # Small delay between requests
+                    await asyncio.sleep(1)
+                    
+                except Exception as e:
+                    logger.error(f"Error updating ranking for keyword {keyword.keyword}: {e}")
+                    continue
+        
+        db.commit()
+        db.close()
+        logger.info(f"Updated rankings for {len(keywords)} keywords in project {project_id}")
+        
+    except Exception as e:
+        logger.error(f"Error updating keyword rankings for project {project_id}: {e}")
+
+# Add endpoint to trigger ranking updates
+@router.post("/refresh-rankings")
+async def refresh_keyword_rankings(
+    project_id: str = Query(...),
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Manually trigger keyword ranking updates for a project"""
+    
+    # Verify project access
+    project = get_user_project(project_id, current_user, db)
+    
+    # Add background task
+    background_tasks.add_task(update_keyword_rankings, project_id)
+    
+    return {
+        "message": "Keyword ranking update started",
+        "project_id": project_id,
+        "project_name": project.name
+    }

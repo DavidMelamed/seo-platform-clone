@@ -31,18 +31,27 @@ from schemas.ai_services import (
 
 router = APIRouter()
 
-# Initialize services
-vision_service = AIVisionService()
-content_service = ContentGenerationService()
-voice_service = VoiceSearchService()
-chat_service = LLMChatService()
+# Service dependency functions
+def get_vision_service() -> AIVisionService:
+    from core.config import settings
+    return AIVisionService(openai_api_key=settings.OPENAI_API_KEY)
+
+def get_content_service() -> ContentGenerationService:
+    return ContentGenerationService()
+
+def get_voice_service() -> VoiceSearchService:
+    return VoiceSearchService()
+
+def get_chat_service() -> LLMChatService:
+    return LLMChatService()
 
 @router.post("/vision/analyze-serp", response_model=VisionAnalysisResponse)
 async def analyze_serp_screenshot(
     file: UploadFile = File(...),
     keyword: str = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    vision_service: AIVisionService = Depends(get_vision_service)
 ):
     """
     Analyze a SERP screenshot using GPT-4 Vision
@@ -237,7 +246,8 @@ async def optimize_for_voice_search(
 async def chat_with_ai(
     message: ChatMessage,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    chat_service: LLMChatService = Depends(get_chat_service)
 ):
     """
     Chat with AI for SEO insights and recommendations

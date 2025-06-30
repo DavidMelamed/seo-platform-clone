@@ -27,6 +27,20 @@ apiClient.interceptors.request.use(
       config.params = { _t: Date.now() };
     }
 
+    // Add auth token if available (dynamically get from storage)
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      try {
+        const { state } = JSON.parse(authStorage);
+        if (state?.token && !config.headers?.Authorization) {
+          config.headers = config.headers || {};
+          config.headers.Authorization = `Bearer ${state.token}`;
+        }
+      } catch (error) {
+        // Ignore JSON parse errors
+      }
+    }
+
     return config;
   },
   (error: AxiosError) => {

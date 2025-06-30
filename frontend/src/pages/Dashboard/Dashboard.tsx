@@ -47,6 +47,8 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
+import { dashboardService, DashboardData } from '../../services/dashboardService';
+import { useAuthStore } from '../../store/authStore';
 
 // Register Chart.js components
 ChartJS.register(
@@ -62,47 +64,6 @@ ChartJS.register(
   Filler
 );
 
-// Mock data for now
-const mockMetrics = {
-  totalKeywords: 1247,
-  avgPosition: 18.5,
-  topTenKeywords: 89,
-  organicTraffic: 24680,
-  keywordChanges: {
-    improved: 156,
-    declined: 89,
-    new: 23,
-  },
-};
-
-const mockChartData = {
-  labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-  datasets: [
-    {
-      label: 'Organic Traffic',
-      data: [12000, 19000, 15000, 25000, 22000, 30000],
-      borderColor: 'rgb(75, 192, 192)',
-      backgroundColor: 'rgba(75, 192, 192, 0.2)',
-      fill: true,
-    },
-  ],
-};
-
-const mockPositionData = {
-  labels: ['Top 3', 'Top 10', 'Top 20', 'Top 50', '50+'],
-  datasets: [
-    {
-      data: [45, 120, 180, 200, 150],
-      backgroundColor: [
-        '#4CAF50',
-        '#8BC34A',
-        '#FFC107',
-        '#FF9800',
-        '#F44336',
-      ],
-    },
-  ],
-};
 
 const MetricCard: React.FC<{
   title: string;
@@ -162,14 +123,16 @@ const MetricCard: React.FC<{
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
-  const [selectedProject, setSelectedProject] = useState('Main Website');
+  const { user } = useAuthStore();
+  const [selectedProject, setSelectedProject] = useState<string | undefined>(undefined);
 
-  // Mock query - replace with real API call
-  const { data, isLoading, refetch } = useQuery(
-    ['dashboard-data'],
-    () => Promise.resolve(mockMetrics),
+  // Real API query for dashboard data
+  const { data: dashboardData, isLoading, refetch } = useQuery<DashboardData>(
+    ['dashboard-data', selectedProject],
+    () => dashboardService.getCompleteDashboard(selectedProject),
     {
       refetchInterval: 60000, // Refetch every minute
+      enabled: !!user, // Only fetch when user is authenticated
     }
   );
 
@@ -216,7 +179,7 @@ const Dashboard: React.FC = () => {
         <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
             <Typography variant="h4" fontWeight={700} gutterBottom>
-              Good morning! 👋
+              Good morning{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}! 👋
             </Typography>
             <Typography variant="body1" color="text.secondary">
               Here's what's happening with your SEO performance today.
@@ -244,7 +207,7 @@ const Dashboard: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Total Keywords"
-              value={mockMetrics.totalKeywords}
+              value={dashboardData?.metrics.total_keywords || 0}
               change={8.2}
               icon={<Search />}
               color="primary"
@@ -253,7 +216,7 @@ const Dashboard: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Average Position"
-              value={mockMetrics.avgPosition}
+              value={dashboardData?.metrics.avg_position || 0}
               change={-2.1}
               icon={<TrendingUp />}
               color="success"
@@ -262,7 +225,7 @@ const Dashboard: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Top 10 Keywords"
-              value={mockMetrics.topTenKeywords}
+              value={dashboardData?.metrics.top_ten_keywords || 0}
               change={12.5}
               icon={<Visibility />}
               color="warning"
@@ -271,7 +234,7 @@ const Dashboard: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Organic Traffic"
-              value={mockMetrics.organicTraffic}
+              value={dashboardData?.metrics.organic_traffic || 0}
               change={15.3}
               icon={<Speed />}
               color="info"
@@ -294,7 +257,13 @@ const Dashboard: React.FC = () => {
                   </IconButton>
                 </Box>
                 <Box sx={{ height: 300 }}>
-                  <Line data={mockChartData} options={chartOptions} />
+                  {dashboardData?.traffic_data ? (
+                    <Line data={dashboardData.traffic_data} options={chartOptions} />
+                  ) : (
+                    <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+                      <Typography color="text.secondary">No traffic data available</Typography>
+                    </Box>
+                  )}
                 </Box>
               </CardContent>
             </Card>
@@ -308,7 +277,13 @@ const Dashboard: React.FC = () => {
                   Position Distribution
                 </Typography>
                 <Box sx={{ height: 300 }}>
-                  <Doughnut data={mockPositionData} options={doughnutOptions} />
+                  {dashboardData?.position_data ? (
+                    <Doughnut data={dashboardData.position_data} options={doughnutOptions} />
+                  ) : (
+                    <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+                      <Typography color="text.secondary">No position data available</Typography>
+                    </Box>
+                  )}
                 </Box>
               </CardContent>
             </Card>
@@ -325,44 +300,42 @@ const Dashboard: React.FC = () => {
                   Recent Activity
                 </Typography>
                 <List>
-                  <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'success.main' }}>
-                        <TrendingUp />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="Keyword 'SEO tools' improved 5 positions"
-                      secondary="2 hours ago"
-                    />
-                    <Chip label="+5" color="success" size="small" />
-                  </ListItem>
-                  <Divider variant="inset" component="li" />
-                  <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        <MonitorHeart />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="Real-time monitoring alert triggered"
-                      secondary="4 hours ago"
-                    />
-                    <Chip label="Alert" color="primary" size="small" />
-                  </ListItem>
-                  <Divider variant="inset" component="li" />
-                  <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'warning.main' }}>
-                        <Psychology />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="AI content analysis completed"
-                      secondary="6 hours ago"
-                    />
-                    <Chip label="Complete" color="warning" size="small" />
-                  </ListItem>
+                  {dashboardData?.recent_activities && dashboardData.recent_activities.length > 0 ? (
+                    dashboardData.recent_activities.map((activity, index) => (
+                      <React.Fragment key={activity.id}>
+                        <ListItem>
+                          <ListItemAvatar>
+                            <Avatar sx={{ 
+                              bgcolor: activity.type === 'alert' ? 'primary.main' : 
+                                       activity.type === 'keyword' ? 'success.main' : 'warning.main'
+                            }}>
+                              {activity.type === 'alert' ? <MonitorHeart /> : 
+                               activity.type === 'keyword' ? <Search /> : <Psychology />}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={activity.title}
+                            secondary={new Date(activity.timestamp).toLocaleDateString()}
+                          />
+                          <Chip 
+                            label={activity.status} 
+                            color={activity.status === 'new' ? 'success' : 'primary'} 
+                            size="small" 
+                          />
+                        </ListItem>
+                        {index < dashboardData.recent_activities.length - 1 && (
+                          <Divider variant="inset" component="li" />
+                        )}
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <ListItem>
+                      <ListItemText
+                        primary="No recent activities"
+                        secondary="Start tracking keywords to see activity"
+                      />
+                    </ListItem>
+                  )}
                 </List>
               </CardContent>
             </Card>
